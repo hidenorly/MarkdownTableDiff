@@ -17,17 +17,20 @@ require_relative "TaskManager"
 
 class FileUtil
 	def self.ensureDirectory(path)
-		paths = path.to_s.split("/")
-		path = ""
-		paths.each do |aPath|
-			if !path.empty? then
-				path += "/"+aPath
-			else
-				path = aPath
-			end
-			begin
-				Dir.mkdir(path) if !Dir.exist?(path)
-			rescue => e
+		path = path.to_s
+		if !File.directory?(path) then
+			paths = path.split("/")
+			path = ""
+			paths.each do |aPath|
+				if !path.empty? then
+					path += "/"+aPath
+				else
+					path = aPath
+				end
+				begin
+					Dir.mkdir(path) if !Dir.exist?(path)
+				rescue => e
+				end
 			end
 		end
 	end
@@ -113,12 +116,21 @@ class FileUtil
 	end
 
 	# get regexp matched file list
-	def self.getRegExpFilteredFiles(basePath, fileFilter)
+	def self.getRegExpFilteredFiles(basePath, fileFilter=nil)
 		result=[]
 		iteratePath(basePath, fileFilter, result, true, false)
 
 		return result
 	end
+
+	def self.getFilenameHashFromPaths(paths)
+		result = {}
+		paths.each do | aPath |
+			result[ getFilenameFromPath( aPath ) ] = aPath
+		end
+		return result
+	end
+
 
 	class FileScannerTask < TaskAsync
 		def initialize(resultCollector, path, fileFilter)
@@ -245,23 +257,30 @@ class Stream
 	def readlines
 		return []
 	end
+
+	def puts(buf)
+	end
+
+	def close
+	end
 end
 
 class ArrayStream < Stream
 	def initialize(dataArray)
 		@dataArray = dataArray.to_a
-		@nPos = 0
+		@nReadPos = 0
+		@nWritePos = 0
 	end
 
 	def eof?
-		return @nPos>=(@dataArray.length)
+		return @nReadPos>=(@dataArray.length)
 	end
 
 	def readline
 		result = nil
 		if !eof?() then
-			result = @dataArray[@nPos]
-			@nPos = @nPos + 1
+			result = @dataArray[@nReadPos]
+			@nReadPos = @nReadPos + 1
 		end
 		return result
 	end
@@ -272,6 +291,16 @@ class ArrayStream < Stream
 
 	def readlines
 		return @dataArray
+	end
+
+	def puts(buf)
+		@dataArray << buf.to_s.strip
+	end
+
+	def close
+		@dataArray = []
+		@nReadPos = 0
+		@nWritePos = 0
 	end
 end
 
@@ -298,6 +327,15 @@ class FileStream < Stream
 
 	def readlines
 		return @io ? @io.readlines : []
+	end
+
+	def puts(buf)
+		@io.puts(buf) if @io
+	end
+
+	def close
+		@io.close() if @io
+		@io = nil
 	end
 end
 

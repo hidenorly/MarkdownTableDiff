@@ -449,11 +449,34 @@ options[:outputReportSection] = options[:outputReportSection].split("|")
 options[:ignoreCols] = options[:ignoreCols].to_s.split("|")
 
 
-if ARGV.length>=2 && File.exist?(ARGV[0]) && File.exist?(ARGV[1]) then
-	reportPath = ARGV.length == 3 ? ARGV[2] : nil
-	if options[:enableDiffDiff] then
-		DiffTableUtil.createDiffDiffReport([ARGV[0], ARGV[1]], reportPath, options[:ignoreCols])
-	else
-		DiffTableUtil.createDiffReport([ARGV[0], ARGV[1]], reportPath, options[:outputReportSection], options[:ignoreCols], options[:enableSectionWithFilename])
+reportPath = ARGV.length == 3 ? ARGV[2] : nil
+
+if ARGV.length>=2 then
+	srcFiles = []
+	dstFiles = []
+
+	if File.directory?( ARGV[0] ) && File.directory?( ARGV[1] ) then
+		# same file name diff mode in the specified directories
+		_srcFiles = FileUtil.getFilenameHashFromPaths( FileUtil.getRegExpFilteredFiles( ARGV[0] ) )
+		_dstFiles = FileUtil.getFilenameHashFromPaths( FileUtil.getRegExpFilteredFiles( ARGV[1] ) )
+
+		commonFiles = _srcFiles.keys & _dstFiles.keys
+		srcFiles = _srcFiles.slice( *commonFiles ).values.sort
+		dstFiles = _dstFiles.slice( *commonFiles ).values.sort
+	elsif File.exist?( ARGV[0] ) && File.exist?( ARGV[1] ) then
+		srcFiles = [ ARGV[0] ]
+		dstFiles = [ ARGV[1] ]
+	end
+
+	isSingleFileMode = srcFiles.length == 1
+	FileUtil.ensureDirectory( reportPath ) if reportPath && !isSingleFileMode
+	srcFiles.zip(dstFiles).each do |aSrc, aDst|
+		# one file mode
+		_reportPath = isSingleFileMode ? reportPath : reportPath ? "#{reportPath}/#{FileUtil.getFilenameFromPath(aSrc)}" : reportPath
+		if options[:enableDiffDiff] then
+			DiffTableUtil.createDiffDiffReport([aSrc, aDst], _reportPath, options[:ignoreCols])
+		else
+			DiffTableUtil.createDiffReport([aSrc, aDst], _reportPath, options[:outputReportSection], options[:ignoreCols], options[:enableSectionWithFilename])
+		end
 	end
 end

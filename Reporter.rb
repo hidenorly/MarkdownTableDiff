@@ -21,7 +21,14 @@ class Reporter
 		return path
 	end
 	def setupOutStream(reportOutPath, enableAppend = false)
-		outStream = reportOutPath ? FileUtil.getFileWriter( ensureCorrespondingExt(reportOutPath), enableAppend) : nil
+		outStream = nil
+		if reportOutPath then
+			if reportOutPath.kind_of?( Stream ) then
+				outStream = reportOutPath
+			else
+				outStream = FileUtil.getFileWriter( ensureCorrespondingExt(reportOutPath), enableAppend)
+			end
+		end
 		outStream = outStream ? outStream : STDOUT
 		@outStream = outStream
 	end
@@ -38,6 +45,10 @@ class Reporter
 	end
 
 	def titleOut(title)
+		@outStream.puts title if @outStream
+	end
+
+	def subTitleOut(title, level = 2)
 		@outStream.puts title if @outStream
 	end
 
@@ -112,6 +123,13 @@ class MarkdownReporter < Reporter
 		end
 	end
 
+	def subTitleOut(title, level = 2)
+		if @outStream
+			@outStream.puts "#{"\#"*level} #{title}"
+			@outStream.puts ""
+		end
+	end
+
 	def ensureCorrespondingExt(path)
 		return path.end_with?(".md") ? path : "#{path}.md"
 	end
@@ -170,6 +188,10 @@ class CsvReporter < Reporter
 		@outStream.puts "" if @outStream
 	end
 
+	def subTitleOut(title, level = 2)
+		titleOut(title)
+	end
+
 	def ensureCorrespondingExt(path)
 		return path.end_with?(".csv") || path.end_with?(".txt") ? path : "#{path}.csv"
 	end
@@ -220,6 +242,9 @@ class XmlReporter < Reporter
 		end
 	end
 
+	def subTitleOut(title, level = 2)
+		titleOut(title)
+	end
 
 	def ensureCorrespondingExt(path)
 		return path.end_with?(".xml") ? path : "#{path}.xml"
