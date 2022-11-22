@@ -412,16 +412,17 @@ class DiffTableUtil
 				reporter.report(diffed)
 				reporter.println()
 			end
+			reporter.close()
 		end
 	end
 end
-
 
 options = {
 	:enableDiffDiff => false,
 	:enableSectionWithFilename => false,
 	:outputReportSection => "added|removed|diffed",
 	:ignoreCols => nil,
+	:sortFiles => "*",
 	:verbose => false
 }
 
@@ -438,6 +439,10 @@ opt_parser = OptionParser.new do |opts|
 
 	opts.on("-d", "--diffdiff", "Enable diff diff mode (default:#{options[:enableDiffDiff]})") do
 		options[:enableDiffDiff] = true
+	end
+
+	opts.on("-s", "--sortFiles=", "Specify manual sort e.g. fileA.md,fileB.md,* *:remaining (default:#{options[:sortFiles]})") do |sortFiles|
+		options[:sortFiles] = sortFiles
 	end
 
 	opts.on("-v", "--verbose", "Enable verbose status output (default:#{options[:verbose]})") do
@@ -457,16 +462,56 @@ if ARGV.length>=2 then
 
 	if File.directory?( ARGV[0] ) && File.directory?( ARGV[1] ) then
 		# same file name diff mode in the specified directories
+		# parse sort order
+		sortFiles = options[:sortFiles].split(",")
+		orders = []
+		specifiedKeys = []
+		i = 0
+		sortFiles.each do |aFile|
+			aFile.strip!
+			current = orders[i]
+			orders[i] = [] if !current || !current.kind_of?(Array)
+			if aFile!="*" then
+				orders[i] << aFile
+				specifiedKeys << aFile
+			else
+				i = i + 1 if !orders[i].empty?
+				orders[i] = "*" # NOT ARRAY
+				i = i + 1
+			end
+		end
+
 		_srcFiles = FileUtil.getFilenameHashFromPaths( FileUtil.getRegExpFilteredFiles( ARGV[0] ) )
 		_dstFiles = FileUtil.getFilenameHashFromPaths( FileUtil.getRegExpFilteredFiles( ARGV[1] ) )
 
 		commonFiles = _srcFiles.keys & _dstFiles.keys
-		srcFiles = _srcFiles.slice( *commonFiles ).values.sort
-		dstFiles = _dstFiles.slice( *commonFiles ).values.sort
+		_srcFiles = _srcFiles.slice(*commonFiles)
+		_dstFiles = _dstFiles.slice(*commonFiles)
+		_srcFiles = _srcFiles.sort.to_h
+		_dstFiles = _dstFiles.sort.to_h
+
+		# put files by sort order
+		remainingFiles = commonFiles - specifiedKeys
+		found = false
+		orders.each do |anOrder|
+			if anOrder.kind_of?(Array) && !anOrder.empty? then
+				srcFiles = srcFiles + _srcFiles.slice( *anOrder ).values
+				dstFiles = dstFiles + _dstFiles.slice( *anOrder ).values
+			else
+				if !found then
+					srcFiles = srcFiles + _srcFiles.slice( *remainingFiles ).values
+					dstFiles = dstFiles + _dstFiles.slice( *remainingFiles ).values
+					found = true
+				end
+			end
+		end
 	elsif File.exist?( ARGV[0] ) && File.exist?( ARGV[1] ) then
 		srcFiles = [ ARGV[0] ]
 		dstFiles = [ ARGV[1] ]
 	end
+
+	puts "---source files----\n#{srcFiles.join("\n")}" if options[:verbose]
+	puts "---destination files----\n#{dstFiles.join("\n")}" if options[:verbose]
 
 	isSingleFileMode = srcFiles.length == 1
 	FileUtil.ensureDirectory( reportPath ) if reportPath && !isSingleFileMode
