@@ -19,6 +19,7 @@ require 'optparse'
 require 'shellwords'
 require_relative 'FileUtil'
 require_relative 'ExecUtil'
+require_relative 'TaskManager'
 require_relative 'Reporter'
 
 class MarkdownParser
@@ -417,6 +418,33 @@ class DiffTableUtil
 	end
 end
 
+
+class DiffExecutor < TaskAsync
+	def initialize(paths, reportPath, options)
+		super("DiffExecutor #{paths}")
+		@paths = paths
+		@reportPath = reportPath
+		@options = options
+	end
+
+	def execute
+		begin
+			if @options[:enableDiffDiff] then
+				puts "createDiffDiffReport:#{@paths}:#{@reportPath}:#{@options[:ignoreCols]}" if @options[:verbose]
+				DiffTableUtil.createDiffDiffReport(@paths, @reportPath, @options[:ignoreCols])
+			else
+				puts "createDiffReport:#{@paths}:#{@reportPath}:#{@options[:ignoreCols]}:#{@options[:outputReportSection]}:#{@options[:enableSectionWithFilename]}" if @options[:verbose]
+				DiffTableUtil.createDiffReport(@paths, @reportPath, @options[:outputReportSection], @options[:ignoreCols], @options[:enableSectionWithFilename])
+			end
+		rescue => ex
+			puts "Exception #{ex}"
+		end
+		_doneTask()
+	end
+end
+
+
+
 options = {
 	:enableDiffDiff => false,
 	:enableSectionWithFilename => false,
@@ -455,6 +483,7 @@ options[:ignoreCols] = options[:ignoreCols].to_s.split("|")
 
 
 reportPath = ARGV.length == 3 ? ARGV[2] : nil
+taskMan = ThreadPool.new( options[:numOfThreads].to_i )
 
 if ARGV.length>=2 then
 	srcFiles = []
@@ -518,10 +547,9 @@ if ARGV.length>=2 then
 	srcFiles.zip(dstFiles).each do |aSrc, aDst|
 		# one file mode
 		_reportPath = isSingleFileMode ? reportPath : reportPath ? "#{reportPath}/#{FileUtil.getFilenameFromPath(aSrc)}" : reportPath
-		if options[:enableDiffDiff] then
-			DiffTableUtil.createDiffDiffReport([aSrc, aDst], _reportPath, options[:ignoreCols])
-		else
-			DiffTableUtil.createDiffReport([aSrc, aDst], _reportPath, options[:outputReportSection], options[:ignoreCols], options[:enableSectionWithFilename])
-		end
+		taskMan.addTask( DiffExecutor.new([aSrc, aDst], _reportPath, options) )
 	end
 end
+
+taskMan.executeAll()
+taskMan.finalize()
