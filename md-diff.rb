@@ -420,25 +420,31 @@ end
 
 
 class DiffExecutor < TaskAsync
-	def initialize(paths, reportPath, options)
+	def initialize(resultCollector, id, paths, reportPath, options)
 		super("DiffExecutor #{paths}")
+		@resultCollector = resultCollector
+		@id = id
 		@paths = paths
 		@reportPath = reportPath
 		@options = options
 	end
 
 	def execute
+		results = []
+		stream = @resultCollector ? ArrayStream.new( results ) : nil
 		begin
 			if @options[:enableDiffDiff] then
 				puts "createDiffDiffReport:#{@paths}:#{@reportPath}:#{@options[:ignoreCols]}" if @options[:verbose]
-				DiffTableUtil.createDiffDiffReport(@paths, @reportPath, @options[:ignoreCols])
+				DiffTableUtil.createDiffDiffReport(@paths, stream ? stream : @reportPath, @options[:ignoreCols])
 			else
 				puts "createDiffReport:#{@paths}:#{@reportPath}:#{@options[:ignoreCols]}:#{@options[:outputReportSection]}:#{@options[:enableSectionWithFilename]}" if @options[:verbose]
-				DiffTableUtil.createDiffReport(@paths, @reportPath, @options[:outputReportSection], @options[:ignoreCols], @options[:enableSectionWithFilename])
+				DiffTableUtil.createDiffReport(@paths, stream ? stream : @reportPath, @options[:outputReportSection], @options[:ignoreCols], @options[:enableSectionWithFilename])
 			end
 		rescue => ex
 			puts "Exception #{ex}"
 		end
+		puts "#{@id}:#{results}" if @options[:verbose]
+		@resultCollector.onResult( @id, results ) if @resultCollector && !results.empty?
 		_doneTask()
 	end
 end
@@ -451,6 +457,7 @@ options = {
 	:outputReportSection => "added|removed|diffed",
 	:ignoreCols => nil,
 	:sortFiles => "*",
+	:singleFileMode => false,
 	:verbose => false
 }
 
@@ -473,6 +480,10 @@ opt_parser = OptionParser.new do |opts|
 		options[:sortFiles] = sortFiles
 	end
 
+	opts.on("-c", "--singleFileMode", "Enable single file report mode (default:#{options[:singleFileMode]})") do
+		options[:singleFileMode] = true
+	end
+
 	opts.on("-v", "--verbose", "Enable verbose status output (default:#{options[:verbose]})") do
 		options[:verbose] = true
 	end
@@ -483,7 +494,9 @@ options[:ignoreCols] = options[:ignoreCols].to_s.split("|")
 
 
 reportPath = ARGV.length == 3 ? ARGV[2] : nil
+resultCollector = ResultCollectorHash.new()
 taskMan = ThreadPool.new( options[:numOfThreads].to_i )
+isSingleFileMode = false
 
 if ARGV.length>=2 then
 	srcFiles = []
@@ -542,14 +555,26 @@ if ARGV.length>=2 then
 	puts "---source files----\n#{srcFiles.join("\n")}" if options[:verbose]
 	puts "---destination files----\n#{dstFiles.join("\n")}" if options[:verbose]
 
-	isSingleFileMode = srcFiles.length == 1
+	isSingleFileMode = ( srcFiles.length == 1 ) | options[:singleFileMode]
 	FileUtil.ensureDirectory( reportPath ) if reportPath && !isSingleFileMode
+	i = 0
 	srcFiles.zip(dstFiles).each do |aSrc, aDst|
 		# one file mode
 		_reportPath = isSingleFileMode ? reportPath : reportPath ? "#{reportPath}/#{FileUtil.getFilenameFromPath(aSrc)}" : reportPath
-		taskMan.addTask( DiffExecutor.new([aSrc, aDst], _reportPath, options) )
+		taskMan.addTask( DiffExecutor.new( isSingleFileMode ? resultCollector : nil, i.to_s, [aSrc, aDst], _reportPath, options) )
+		i = i + 1
 	end
 end
 
 taskMan.executeAll()
 taskMan.finalize()
+
+if isSingleFileMode then
+	_result = resultCollector.getResult()
+	_result = _result.sort
+	reporter = Reporter.new( reportPath )
+	_result.each do | id, theResult |
+		reporter.report( theResult )
+	end
+	reporter.close()
+end
