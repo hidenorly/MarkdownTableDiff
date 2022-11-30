@@ -319,7 +319,7 @@ class DiffTableUtil
 		return path
 	end
 
-	def self.createDiffReport(paths, outputReportPath = nil, reportSections = ["added", "removed", "diffed"], diffIgnoreCols = [], enableSectionWithFilename = false)
+	def self.createDiffReport(paths, reporter, reportSections = ["added", "removed", "diffed"], diffIgnoreCols = [], enableSectionWithFilename = false)
 		if paths.length == 2 then
 			# read diff report
 			added, removed = getDiffTable( getPureDiff(paths[0], paths[1]) )
@@ -335,13 +335,10 @@ class DiffTableUtil
 			pureAdded, pureRemoved, diffed = DiffTableUtil.getAnalyzedDiffedData(added, removed, cols, diffIgnoreCols)
 
 			# report
-			reportPath = outputReportPath ? outputReportPath : nil # "Diff-#{_getLabel(paths[0])}-#{_getLabel(paths[1])}.md"
-			reporter = MarkdownReporter.new( reportPath )
-
 			if !pureAdded.empty? && (!reportSections || reportSections.include?("added")) then
 				title = "added"
 				title = "#{title} by #{paths[1]} from #{paths[0]}" if enableSectionWithFilename
-				reporter.titleOut(title)
+				reporter.subTitleOut(title)
 				reporter.report(pureAdded)
 				reporter.println()
 			end
@@ -349,7 +346,7 @@ class DiffTableUtil
 			if !pureRemoved.empty? && (!reportSections || reportSections.include?("removed")) then
 				title = "removed"
 				title = "#{title} by #{paths[1]} from #{paths[0]}" if enableSectionWithFilename
-				reporter.titleOut(title)
+				reporter.subTitleOut(title)
 				reporter.report(pureRemoved)
 				reporter.println()
 			end
@@ -357,7 +354,7 @@ class DiffTableUtil
 			if !diffed.empty? && (!reportSections || reportSections.include?("diffed")) then
 				title = "diffed"
 				title = "#{title} between #{paths[0]} and #{paths[1]}" if enableSectionWithFilename
-				reporter.titleOut(title)
+				reporter.subTitleOut(title)
 				reporter.report(diffed)
 				reporter.println()
 			end
@@ -366,7 +363,7 @@ class DiffTableUtil
 		end
 	end
 
-	def self.createDiffDiffReport(paths, outputReportPath = nil, diffIgnoreCols = [])
+	def self.createDiffDiffReport(paths, reporter, diffIgnoreCols = [])
 		if paths.length == 2 then
 			# get cols
 			cols = MarkdownParser.getEnsuredCols(paths)
@@ -407,9 +404,8 @@ class DiffTableUtil
 				diffeds[aSection] = aResult if aResult && !aResult.empty?
 			end
 
-			reporter = MarkdownReporter.new( outputReportPath )
 			diffeds.each do |aSection, diffed|
-				reporter.titleOut(aSection)
+				reporter.subTitleOut(aSection)
 				reporter.report(diffed)
 				reporter.println()
 			end
@@ -432,13 +428,15 @@ class DiffExecutor < TaskAsync
 	def execute
 		results = []
 		stream = @resultCollector ? ArrayStream.new( results ) : nil
+		reporter = MarkdownReporter.new( stream ? stream : @reportPath )
+		reporter.titleOut( FileUtil.getFilenameFromPath( @paths.to_a[0] ) ) if @resultCollector
 		begin
 			if @options[:enableDiffDiff] then
 				puts "createDiffDiffReport:#{@paths}:#{@reportPath}:#{@options[:ignoreCols]}" if @options[:verbose]
-				DiffTableUtil.createDiffDiffReport(@paths, stream ? stream : @reportPath, @options[:ignoreCols])
+				DiffTableUtil.createDiffDiffReport(@paths, reporter, @options[:ignoreCols])
 			else
 				puts "createDiffReport:#{@paths}:#{@reportPath}:#{@options[:ignoreCols]}:#{@options[:outputReportSection]}:#{@options[:enableSectionWithFilename]}" if @options[:verbose]
-				DiffTableUtil.createDiffReport(@paths, stream ? stream : @reportPath, @options[:outputReportSection], @options[:ignoreCols], @options[:enableSectionWithFilename])
+				DiffTableUtil.createDiffReport(@paths, reporter, @options[:outputReportSection], @options[:ignoreCols], @options[:enableSectionWithFilename])
 			end
 		rescue => ex
 			puts "Exception #{ex}"
