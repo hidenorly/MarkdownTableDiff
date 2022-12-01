@@ -426,10 +426,10 @@ class DiffExecutor < TaskAsync
 	end
 
 	def execute
+		# create diff report body
 		results = []
-		stream = @resultCollector ? ArrayStream.new( results ) : nil
-		reporter = MarkdownReporter.new( stream ? stream : @reportPath )
-		reporter.titleOut( FileUtil.getFilenameFromPath( @paths.to_a[0] ) ) if @resultCollector
+		stream = ArrayStream.new( results )
+		reporter = MarkdownReporter.new( stream )
 		begin
 			if @options[:enableDiffDiff] then
 				puts "createDiffDiffReport:#{@paths}:#{@reportPath}:#{@options[:ignoreCols]}" if @options[:verbose]
@@ -441,8 +441,29 @@ class DiffExecutor < TaskAsync
 		rescue => ex
 			puts "Exception #{ex}"
 		end
+		reporter.close()
+
+		# create header
+		resultHeader = []
+		reporter = MarkdownReporter.new( ArrayStream.new( resultHeader ) )
+		reporter.titleOut( FileUtil.getFilenameFromPath( @paths.to_a[0] ) ) if !results.empty?
+		reporter.close()
+
+		# concat header + results
+		results = resultHeader + results
+
 		puts "#{@id}:#{results}" if @options[:verbose]
-		@resultCollector.onResult( @id, results ) if @resultCollector && !results.empty?
+
+		if !@resultCollector then
+			if !@options[:enableDiffDiff] || !results.empty? then
+				reporter = Reporter.new( @reportPath )
+				reporter.report( results )
+				reporter.close()
+			end
+		else
+			@resultCollector.onResult( @id, results ) if @resultCollector && !results.empty?
+		end
+
 		_doneTask()
 	end
 end
@@ -456,6 +477,7 @@ options = {
 	:ignoreCols => nil,
 	:sortFiles => "*",
 	:singleFileMode => false,
+	:dontReportIfNoDiff => false,
 	:verbose => false
 }
 
@@ -480,6 +502,10 @@ opt_parser = OptionParser.new do |opts|
 
 	opts.on("-c", "--singleFileMode", "Enable single file report mode (default:#{options[:singleFileMode]})") do
 		options[:singleFileMode] = true
+	end
+
+	opts.on("-n", "--dontReportIfNoDiff", "Don't report if no diff (default:#{options[:dontReportIfNoDiff]})") do
+		options[:dontReportIfNoDiff] = true
 	end
 
 	opts.on("-v", "--verbose", "Enable verbose status output (default:#{options[:verbose]})") do
@@ -575,4 +601,7 @@ if isSingleFileMode then
 		reporter.report( theResult )
 	end
 	reporter.close()
+
+	File.rm_f( reportPath ) if options[:dontReportIfNoDiff] && reportPath && File.size( reportPath ) == 0
 end
+
