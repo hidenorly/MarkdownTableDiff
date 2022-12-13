@@ -602,6 +602,6 @@ if isSingleFileMode then
 	end
 	reporter.close()
 
-	File.rm_f( reportPath ) if options[:dontReportIfNoDiff] && reportPath && File.size( reportPath ) == 0
+	File.delete( reportPath ) if options[:dontReportIfNoDiff] && reportPath && File.size( reportPath ) == 0
 end
 
