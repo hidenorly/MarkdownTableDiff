@@ -496,6 +496,10 @@ opt_parser = OptionParser.new do |opts|
 		options[:enableDiffDiff] = true
 	end
 
+	opts.on("-i", "--ignoreCols=", "Specify cols if you want to ignore the diff. e.g. filename|line if multiply ignoring") do |ignoreCols|
+		options[:ignoreCols] = ignoreCols
+	end
+
 	opts.on("-s", "--sortFiles=", "Specify manual sort e.g. fileA.md,fileB.md,* *:remaining (default:#{options[:sortFiles]})") do |sortFiles|
 		options[:sortFiles] = sortFiles
 	end
