@@ -6,6 +6,10 @@ Usage: old.md new.md (reportPath)
     -o, --outputReportSection=       Specify to markdown report output section for each project (added|removed|diffed)
     -f, --enableSectionWithFilename  Enable filename to section (default:false)
     -d, --diffdiff                   Enable diff diff mode (default:false)
+    -i, --ignoreCols=                Specify cols if you want to ignore the diff. e.g. filename|line if multiply ignoring
+    -s, --sortFiles=                 Specify manual sort e.g. fileA.md,fileB.md,* *:remaining (default:*)
+    -c, --singleFileMode             Enable single file report mode (default:false)
+    -n, --dontReportIfNoDiff         Don't report if no diff (default:false)
     -v, --verbose                    Enable verbose status output (default:false)
 ```
 
